@@ -4,16 +4,24 @@ import { join } from "path";
 import ffmpeg from "fluent-ffmpeg";
 import { existsSync } from "fs";
 import { PlatformPreset, PLATFORM_PRESETS } from "@/app/types/quality";
+import ffmpegStatic from 'ffmpeg-static';
+import { createReadStream, createWriteStream } from 'fs';
+import { pipeline } from 'stream/promises';
+import pLimit from 'p-limit';
+import os from 'os';
 
 // FFmpegのパスを設定
-const ffmpegPath = "D:\\Documents\\ffmpeg\\ffmpeg-master-latest-win64-gpl-shared\\bin\\ffmpeg.exe";
+const ffmpegPath = ffmpegStatic || 'ffmpeg';
+console.log(`FFmpeg Path: ${ffmpegPath}`); // パス確認用ログを追加
 ffmpeg.setFfmpegPath(ffmpegPath);
 
 export const config = {
   api: {
     bodyParser: false,
-    responseLimit: false,
+    responseLimit: '50mb',
+    externalResolver: true,
   },
+  runtime: 'nodejs'
 };
 
 async function generateWaveform(inputPath: string, outputPath: string, startTime: number = 0): Promise<void> {
@@ -162,7 +170,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 一時ファイルのパスを設定
-    const tempDir = join(process.cwd(), "tmp");
+    const tempDir = join(os.tmpdir(), 'utaite-tmp');
     
     // tmpディレクトリが存在しない場合は作成
     if (!existsSync(tempDir)) {
@@ -178,14 +186,32 @@ export async function POST(request: NextRequest) {
     const audioWaveformPath = join(tempDir, `audio_waveform_${timestamp}.png`);
 
     // 一時ファイルとして保存
-    await writeFile(videoPath, Buffer.from(await video.arrayBuffer()));
-    await writeFile(audioPath, Buffer.from(await audio.arrayBuffer()));
+    const videoWriteStream = createWriteStream(videoPath);
+    await pipeline(
+      video.stream(), 
+      videoWriteStream
+    );
 
-    console.log("Files saved:", { videoPath, audioPath });
+    // 音声ファイルの保存処理を追加
+    const audioWriteStream = createWriteStream(audioPath);
+    await pipeline(
+      audio.stream(), 
+      audioWriteStream
+    );
 
-    // 元の動画から音声を抽出
+    // ファイル保存後に存在確認を追加
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    if (!existsSync(videoPath) || !existsSync(audioPath)) {
+      throw new Error("ファイルの保存に失敗しました");
+    }
+
+    // 音声抽出後の待機処理を追加
     console.log("Extracting audio from video...");
     await extractAudioWaveform(videoPath, videoAudioPath);
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    if (!existsSync(videoAudioPath)) {
+      throw new Error("音声抽出に失敗しました");
+    }
 
     if (mode === "analyze") {
       // 波形を生成（動画は0秒から、音声は指定された開始時間から）
