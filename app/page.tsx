@@ -248,6 +248,46 @@ export default function EncodePage() {
     }
   };
 
+  async function handleLargeFileUpload(file: File) {
+    // 例として5MBごとにチャンクに分割
+    const CHUNK_SIZE = 5 * 1024 * 1024;
+    let uploadedSize = 0;
+
+    for (let start = 0; start < file.size; start += CHUNK_SIZE) {
+      // チャンクの切り出し
+      const chunk = file.slice(start, start + CHUNK_SIZE);
+
+      // フォームデータを作成して送信
+      const formData = new FormData();
+      formData.append("file", chunk, file.name); 
+      // fileIdなどを使ってどのファイルのチャンクか識別したい場合は追加
+      // formData.append("fileId", "your-file-id");
+
+      const res = await fetch("/api/chunk-upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        throw new Error("チャンクアップロードに失敗しました");
+      }
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.error || "不明なエラーが発生しました");
+      }
+
+      // 成功した場合、Vercel Blob 上に chunk-url ができている
+      // data.url をローカルでリスト管理し、後続の結合やエンコードで参照する
+
+      // 今回は単純に進捗を計算・表示例
+      uploadedSize += chunk.size;
+      console.log(`${uploadedSize}/${file.size} bytes uploaded`);
+    }
+
+    // すべてのチャンクアップロード完了後、サーバー側で結合 or エンコードを呼び出す処理へ
+    // たとえば "/api/encode/process" に POST して結合処理を進める など
+  }
+
   return (
     <div className="container mx-auto py-8 space-y-8 max-w-5xl">
       <div className="flex items-center justify-between">
