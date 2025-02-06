@@ -15,7 +15,7 @@ import { put } from "@vercel/blob";
 
 // FFmpeg のパスを設定
 const ffmpegPath = ffmpegStatic || "ffmpeg";
-console.log(`FFmpeg Path: ${ffmpegPath}`); // パス確認用ログ
+console.log(`FFmpeg Path: ${ffmpegPath}`);
 ffmpeg.setFfmpegPath(ffmpegPath);
 
 export const config = {
@@ -27,12 +27,11 @@ export const config = {
   runtime: "nodejs",
 };
 
-// 波形生成（動画）用ヘルパー関数
-async function generateWaveform(
-  inputPath: string,
-  outputPath: string,
-  startTime: number = 0
-): Promise<void> {
+// ---------------------------------
+// 各種ヘルパー関数
+// ---------------------------------
+
+async function generateWaveform(inputPath: string, outputPath: string, startTime: number = 0): Promise<void> {
   return new Promise((resolve, reject) => {
     ffmpeg()
       .input(inputPath)
@@ -44,8 +43,7 @@ async function generateWaveform(
           "scale=1920:240",
           "drawgrid=width=2:height=0:x=384:y=0:color=white@0.2",
         ].join(","),
-        "-frames:v",
-        "1",
+        "-frames:v", "1",
       ])
       .output(outputPath)
       .on("end", () => resolve())
@@ -54,22 +52,15 @@ async function generateWaveform(
   });
 }
 
-// 音声抽出（Waveform 用）ヘルパー関数
-async function extractAudioWaveform(
-  inputPath: string,
-  outputPath: string
-): Promise<void> {
+async function extractAudioWaveform(inputPath: string, outputPath: string): Promise<void> {
   return new Promise((resolve, reject) => {
     ffmpeg()
       .input(inputPath)
       .outputOptions([
         "-vn",
-        "-acodec",
-        "pcm_s16le",
-        "-ar",
-        "48000",
-        "-ac",
-        "2",
+        "-acodec", "pcm_s16le",
+        "-ar", "48000",
+        "-ac", "2",
       ])
       .save(outputPath)
       .on("end", () => resolve())
@@ -77,33 +68,23 @@ async function extractAudioWaveform(
   });
 }
 
-// PCM サンプル抽出用（音声分析用）の例
-async function analyzeAudioSegment(
-  audioPath: string,
-  startTime: number,
-  duration: number
-): Promise<number[]> {
+async function analyzeAudioSegment(audioPath: string, startTime: number, duration: number): Promise<number[]> {
   return new Promise((resolve, reject) => {
     const samples: number[] = [];
     ffmpeg()
       .input(audioPath)
       .inputOptions([`-ss ${startTime}`, `-t ${duration}`])
       .outputOptions([
-        "-f",
-        "s16le",
-        "-acodec",
-        "pcm_s16le",
-        "-ar",
-        "48000",
-        "-ac",
-        "2",
+        "-f", "s16le",
+        "-acodec", "pcm_s16le",
+        "-ar", "48000",
+        "-ac", "2",
       ])
       .on("stderr", (stderrLine) => {
         console.log("FFmpeg stderr:", stderrLine);
       })
       .pipe()
       .on("data", (chunk: Buffer) => {
-        // ステレオの場合、左チャンネルのみを使用
         for (let i = 0; i < chunk.length; i += 4) {
           const sample = chunk.readInt16LE(i) / 32768.0;
           samples.push(sample);
@@ -111,9 +92,7 @@ async function analyzeAudioSegment(
       })
       .on("end", () => {
         if (samples.length === 0) {
-          console.log(
-            `警告: ${startTime}秒から${duration}秒の区間でサンプルが取得できませんでした。`
-          );
+          console.log(`警告: ${startTime}秒から${duration}秒でサンプルが取得できませんでした。`);
           resolve([0]);
         } else {
           const normalizedSamples = normalizeSamples(samples, 1000);
@@ -164,7 +143,7 @@ function findBestOffset(videoSamples: number[], audioSamples: number[]): number 
   return offsetSeconds;
 }
 
-// Web ReadableStream → Node.js Readable 変換ヘルパー
+// Web の ReadableStream を Node.js の Readable に変換する
 function webStreamToNodeStream(webStream: ReadableStream<Uint8Array>): Readable {
   const reader = webStream.getReader();
   return new Readable({
@@ -186,11 +165,7 @@ function webStreamToNodeStream(webStream: ReadableStream<Uint8Array>): Readable 
 /**
  * Vercel Blob へのアップロード用ヘルパー関数
  */
-async function uploadToVercelBlob(
-  stream: Readable,
-  fileName: string,
-  maxRetries = 3
-): Promise<string> {
+async function uploadToVercelBlob(stream: Readable, fileName: string, maxRetries = 3): Promise<string> {
   try {
     const blob = await put(fileName, stream, {
       access: "public",
@@ -203,11 +178,8 @@ async function uploadToVercelBlob(
   }
 }
 
-// URL から波形（画像）を生成するヘルパー関数
-async function generateWaveformFromUrl(
-  inputUrl: string,
-  startTime: number = 0
-): Promise<Buffer> {
+// URL から波形画像（PNG）を生成する
+async function generateWaveformFromUrl(inputUrl: string, startTime: number = 0): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const data: Buffer[] = [];
     ffmpeg()
@@ -220,12 +192,9 @@ async function generateWaveformFromUrl(
           "scale=1920:240",
           "drawgrid=width=2:height=0:x=384:y=0:color=white@0.2",
         ].join(","),
-        "-frames:v",
-        "1",
-        "-f",
-        "image2",
-        "-c:v",
-        "png",
+        "-frames:v", "1",
+        "-f", "image2",
+        "-c:v", "png",
       ])
       .toFormat("image2pipe")
       .on("error", (err) => {
@@ -240,7 +209,7 @@ async function generateWaveformFromUrl(
   });
 }
 
-// URL から音声を PCM 化して Buffer で返すヘルパー関数
+// URL から音声を PCM 化して Buffer で返す
 async function extractAudioToPCM(inputUrl: string): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const data: Buffer[] = [];
@@ -248,12 +217,9 @@ async function extractAudioToPCM(inputUrl: string): Promise<Buffer> {
       .input(inputUrl)
       .outputOptions([
         "-vn",
-        "-acodec",
-        "pcm_s16le",
-        "-ar",
-        "48000",
-        "-ac",
-        "2",
+        "-acodec", "pcm_s16le",
+        "-ar", "48000",
+        "-ac", "2",
       ])
       .format("wav")
       .on("error", (err) => reject(err))
@@ -265,37 +231,30 @@ async function extractAudioToPCM(inputUrl: string): Promise<Buffer> {
   });
 }
 
+// ---------------------------------
+// API エンドポイント (POST)
+// ---------------------------------
+
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
     const video = formData.get("video") as Blob;
     const audio = formData.get("audio") as Blob;
     const mode = formData.get("mode") as string;
-    const audioStartTime = parseFloat(
-      (formData.get("audioStartTime") as string) || "0"
-    );
+    const audioStartTime = parseFloat((formData.get("audioStartTime") as string) || "0");
     const platform = (formData.get("platform") as PlatformPreset) || "youtube";
     const platformSettings = PLATFORM_PRESETS[platform];
 
     if (!video || !audio) {
-      return NextResponse.json(
-        { error: "動画と音声ファイルが必要です" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "動画と音声ファイルが必要です" }, { status: 400 });
     }
 
-    // (1) ローカル一時ファイル保存はせず、Vercel Blob にアップロード
+    // (1) ローカル一時ファイル保存はせず、Vercel Blob へアップロード
     const videoNodeStream = webStreamToNodeStream(video.stream());
     const audioNodeStream = webStreamToNodeStream(audio.stream());
     const timestamp = Date.now();
-    const videoUrl = await uploadToVercelBlob(
-      videoNodeStream,
-      `input_${timestamp}.mp4`
-    );
-    const audioUrl = await uploadToVercelBlob(
-      audioNodeStream,
-      `input_${timestamp}.wav`
-    );
+    const videoUrl = await uploadToVercelBlob(videoNodeStream, `input_${timestamp}.mp4`);
+    const audioUrl = await uploadToVercelBlob(audioNodeStream, `input_${timestamp}.wav`);
 
     // (2) mode が "analyze" の場合
     if (mode === "analyze") {
@@ -305,17 +264,16 @@ export async function POST(request: NextRequest) {
           generateWaveformFromUrl(videoUrl, 0),
           generateWaveformFromUrl(audioUrl, audioStartTime),
         ]);
-
         console.log("Waveforms generated successfully");
         console.log("Video waveform size:", videoWaveform.length);
         console.log("Audio waveform size:", audioWaveform.length);
 
-        // PCM 取得（ここでは例として使用）
+        // PCM 取得（例として）
         const [videoPCM, audioPCM] = await Promise.all([
           extractAudioToPCM(videoUrl),
           extractAudioToPCM(audioUrl),
         ]);
-        // ダミーの相関オフセット（本来は analyzeAudioSegment や findBestOffset を使用）
+        // 本来は analyzeAudioSegment や findBestOffset を用いる
         const segmentOffset = 0.1;
 
         return NextResponse.json({
@@ -332,73 +290,50 @@ export async function POST(request: NextRequest) {
     // (3) mode が "process" の場合（動画生成）
     if (mode === "process") {
       try {
-        const suggestedOffset = parseFloat(
-          (formData.get("offset") as string) || "0"
-        );
+        const suggestedOffset = parseFloat((formData.get("offset") as string) || "0");
         const additionalOffset = -0.01;
         const finalOffset = suggestedOffset + additionalOffset;
         const outputBuffers: Buffer[] = [];
 
         await new Promise((resolve, reject) => {
           let command = ffmpeg();
+          // 入力: videoUrl と audioUrl
+          command.input(videoUrl).input(audioUrl);
+          // ※ 音声の開始タイムスタンプはフィルターで調整するので、ここでは不要とする
 
-          // 入力設定
-          command.input(videoUrl).input(audioUrl).inputOptions([
-            "-ss",
-            audioStartTime.toString(),
-          ]);
-
-          // オフセットに応じたフィルター設定
-          if (finalOffset < 0) {
+          // フィルター設定（シンプルに音声のタイミング調整のみ）
+          if (finalOffset >= 0) {
+            // 正のオフセット：音声に無音を付加して遅延させる
+            const delayMs = Math.round(finalOffset * 1000);
             command.complexFilter([
-              `[1:a]atrim=start=${Math.abs(finalOffset)},asetpts=PTS-STARTPTS[a1]`,
-              `[0:v][a1]concat=n=1:v=1:a=1[outv][outa]`,
+              `[1:a]adelay=${delayMs}|${delayMs},asetpts=PTS-STARTPTS[outa]`
             ]);
           } else {
+            // 負のオフセット：音声の先頭部分をトリムする
             command.complexFilter([
-              `aevalsrc=0:d=${finalOffset}[silence]`,
-              `[1:a]asetpts=PTS-STARTPTS[a1]`,
-              `[silence][a1]concat=n=2:v=0:a=1[delayed_audio]`,
-              `[0:v][delayed_audio]concat=n=1:v=1:a=1[outv][outa]`,
+              `[1:a]atrim=start=${Math.abs(finalOffset)},asetpts=PTS-STARTPTS[outa]`
             ]);
           }
 
-          // 出力設定（パイプ出力の場合はフラグメント化された MP4 として出力）
+          // 映像はそのまま、音声はフィルター出力 [outa] を使用
           command
             .outputOptions([
-              "-map",
-              "[outv]",
-              "-map",
-              "[outa]",
-              "-c:v",
-              "h264",
-              "-preset",
-              platformSettings.videoSettings.preset,
-              "-profile:v",
-              platformSettings.videoSettings.profile,
-              "-crf",
-              platformSettings.videoSettings.crf.toString(),
-              "-pix_fmt",
-              "yuv420p",
-              "-c:a",
-              "aac",
-              "-b:v",
-              `${platformSettings.videoSettings.bitrate}k`,
-              "-maxrate",
-              `${platformSettings.videoSettings.maxrate}k`,
-              "-bufsize",
-              `${platformSettings.videoSettings.bufsize}k`,
-              "-b:a",
-              `${platformSettings.audioSettings.bitrate}k`,
-              "-ar",
-              "48000",
-              "-ac",
-              "2",
-              // 修正：パイプ出力向けの movflags
-              "-movflags",
-              "frag_keyframe+empty_moov",
-              "-f",
-              "mp4",
+              "-map", "0:v",
+              "-map", "[outa]",
+              "-c:v", "h264",
+              "-preset", platformSettings.videoSettings.preset,
+              "-profile:v", platformSettings.videoSettings.profile,
+              "-crf", platformSettings.videoSettings.crf.toString(),
+              "-pix_fmt", "yuv420p",
+              "-c:a", "aac",
+              "-b:v", `${platformSettings.videoSettings.bitrate}k`,
+              "-maxrate", `${platformSettings.videoSettings.maxrate}k`,
+              "-bufsize", `${platformSettings.videoSettings.bufsize}k`,
+              "-b:a", `${platformSettings.audioSettings.bitrate}k`,
+              "-ar", "48000",
+              "-ac", "2",
+              "-movflags", "frag_keyframe+empty_moov",
+              "-f", "mp4",
               "-y",
             ])
             .on("stderr", (line) => {
@@ -417,7 +352,7 @@ export async function POST(request: NextRequest) {
             });
         });
 
-        // 処理済み動画を Blob にアップロードして URL を取得
+        // 処理済み動画を結合して Blob にアップロード
         const processedVideo = Buffer.concat(outputBuffers);
         const outputBlob = await put(`output_${timestamp}.mp4`, processedVideo, {
           access: "public",

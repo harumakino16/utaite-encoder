@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
@@ -33,16 +33,15 @@ export default function EncodePage() {
   const [outputFileName, setOutputFileName] = useState("");
   const [platform, setPlatform] = useState<PlatformPreset>("youtube");
 
-  // audioFileが変更されたら、デフォルトの出力ファイル名を設定
+  // audioFile が変更されたら、出力ファイル名の初期値を設定
   useEffect(() => {
     if (audioFile) {
-      // 拡張子を除いたファイル名を取得
       const baseName = audioFile.name.replace(/\.[^/.]+$/, "");
       setOutputFileName(baseName);
     }
   }, [audioFile]);
 
-  // audioStartTimeが変更されたら自動的に波形を更新
+  // audioStartTime が変更されたら自動的に波形更新（すでに波形がある場合）
   useEffect(() => {
     if (videoFile && audioFile && (videoWaveform || audioWaveform)) {
       analyzeWaveforms();
@@ -69,22 +68,25 @@ export default function EncodePage() {
       } else if (file.type === "audio/wav") {
         setAudioFile(file);
       }
-      // アップロードの進捗をシミュレート
+      // 進捗シミュレーション
       for (let i = 0; i <= 100; i += 10) {
         setUploadProgress(i);
-        await new Promise(resolve => setTimeout(resolve, 50));
+        await new Promise((resolve) => setTimeout(resolve, 50));
       }
     }
 
     setIsUploading(false);
     setUploadProgress(0);
 
-    // 両方のファイルがアップロードされたら自動的に波形分析を実行
-    const updatedFiles = files.reduce((acc, file) => {
-      if (file.type === "video/mp4") acc.video = file;
-      if (file.type === "audio/wav") acc.audio = file;
-      return acc;
-    }, { video: videoFile, audio: audioFile });
+    // 両方のファイルが選択されている場合、波形分析を自動実行
+    const updatedFiles = files.reduce(
+      (acc, file) => {
+        if (file.type === "video/mp4") acc.video = file;
+        if (file.type === "audio/wav") acc.audio = file;
+        return acc;
+      },
+      { video: videoFile, audio: audioFile }
+    );
 
     if (updatedFiles.video && updatedFiles.audio) {
       const formData = new FormData();
@@ -100,11 +102,9 @@ export default function EncodePage() {
           method: "POST",
           body: formData,
         });
-
         if (!response.ok) {
           throw new Error("波形分析に失敗しました");
         }
-
         const data = await response.json();
         setVideoWaveform(data.videoWaveform);
         setAudioWaveform(data.audioWaveform);
@@ -112,7 +112,10 @@ export default function EncodePage() {
       } catch (error) {
         toast({
           title: "エラー",
-          description: error instanceof Error ? error.message : "波形分析に失敗しました",
+          description:
+            error instanceof Error
+              ? error.message
+              : "波形分析に失敗しました",
           variant: "destructive",
         });
       } finally {
@@ -131,13 +134,11 @@ export default function EncodePage() {
     handleFileUpload(Array.from(e.target.files || []));
   };
 
-  // スライダーの値を変更したときのハンドラー
   const handleSliderChange = (values: number[]) => {
     const value = values[0];
     setAudioStartTime(value);
   };
 
-  // 数値入力のハンドラー
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = parseFloat(e.target.value);
     if (!isNaN(value) && value >= -3 && value <= 3) {
@@ -160,7 +161,7 @@ export default function EncodePage() {
     formData.append("video", videoFile);
     formData.append("audio", audioFile);
     formData.append("mode", "analyze");
-    formData.append("startTime", "0"); // 動画は常に0秒から
+    formData.append("startTime", "0");
     formData.append("audioStartTime", audioStartTime.toString());
 
     try {
@@ -168,11 +169,9 @@ export default function EncodePage() {
         method: "POST",
         body: formData,
       });
-
       if (!response.ok) {
         throw new Error("波形分析に失敗しました");
       }
-
       const data = await response.json();
       setVideoWaveform(data.videoWaveform);
       setAudioWaveform(data.audioWaveform);
@@ -180,7 +179,8 @@ export default function EncodePage() {
     } catch (error) {
       toast({
         title: "エラー",
-        description: error instanceof Error ? error.message : "波形分析に失敗しました",
+        description:
+          error instanceof Error ? error.message : "波形分析に失敗しました",
         variant: "destructive",
       });
     } finally {
@@ -221,29 +221,30 @@ export default function EncodePage() {
         method: "POST",
         body: formData,
       });
-
       if (!response.ok) {
         throw new Error("動画処理に失敗しました");
       }
-
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${outputFileName.trim()}.mp4`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-
-      toast({
-        title: "成功",
-        description: "動画の処理が完了しました",
-      });
+      const result = await response.json();
+      if (result.success) {
+        // 自動ダウンロード処理
+        const link = document.createElement("a");
+        link.href = result.url;
+        link.download = `${outputFileName.trim()}.mp4`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        toast({
+          title: "成功",
+          description: "動画の処理が完了し、ダウンロードが開始されました",
+        });
+      } else {
+        throw new Error(result.error || "不明なエラーが発生しました");
+      }
     } catch (error) {
       toast({
         title: "エラー",
-        description: error instanceof Error ? error.message : "動画処理に失敗しました",
+        description:
+          error instanceof Error ? error.message : "動画処理に失敗しました",
         variant: "destructive",
       });
     } finally {
@@ -273,10 +274,12 @@ export default function EncodePage() {
       </div>
 
       <Card>
-        <CardContent className={cn(
-          "p-8 transition-all duration-300",
-          !videoFile || !audioFile ? "min-h-[300px]" : ""
-        )}>
+        <CardContent
+          className={cn(
+            "p-8 transition-all duration-300",
+            !videoFile || !audioFile ? "min-h-[300px]" : ""
+          )}
+        >
           {isUploading ? (
             <div className="space-y-4">
               <div className="text-center text-lg font-medium">
@@ -319,11 +322,17 @@ export default function EncodePage() {
                 <div className="text-sm text-muted-foreground">
                   必要なファイル:
                   <div className="flex justify-center gap-4 mt-2">
-                    <Badge variant={videoFile ? "default" : "secondary"} className="gap-2">
+                    <Badge
+                      variant={videoFile ? "default" : "secondary"}
+                      className="gap-2"
+                    >
                       <Video className="h-4 w-4" />
                       本家動画 (.mp4)
                     </Badge>
-                    <Badge variant={audioFile ? "default" : "secondary"} className="gap-2">
+                    <Badge
+                      variant={audioFile ? "default" : "secondary"}
+                      className="gap-2"
+                    >
                       <Music4 className="h-4 w-4" />
                       Mix音源 (.wav)
                     </Badge>
@@ -346,7 +355,9 @@ export default function EncodePage() {
                   <div className="flex flex-col gap-1">
                     <div className="flex items-center justify-between">
                       <div className="flex flex-col">
-                        <span className="text-sm font-medium">Mix音源の開始位置</span>
+                        <span className="text-sm font-medium">
+                          Mix音源の開始位置
+                        </span>
                         {videoWaveform && audioWaveform && (
                           <p className="text-sm text-muted-foreground mt-1">
                             スライダーを動かして2つの波形の山が重なるように調整してください
@@ -445,7 +456,9 @@ export default function EncodePage() {
                           placeholder="出力ファイル名"
                           className="flex-grow font-mono"
                         />
-                        <span className="text-sm font-mono text-muted-foreground">.mp4</span>
+                        <span className="text-sm font-mono text-muted-foreground">
+                          .mp4
+                        </span>
                       </div>
                       <Button
                         onClick={processVideo}
@@ -472,4 +485,4 @@ export default function EncodePage() {
       </Card>
     </div>
   );
-} 
+}
