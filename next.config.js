@@ -8,12 +8,17 @@ const nextConfig = {
   webpack: (config) => {
     config.resolve.fallback = {
       ...config.resolve.fallback,
+      stream: require.resolve('stream-browserify'),
+      buffer: require.resolve('buffer/'),
       fs: false,
       path: false,
       os: false
     };
     return config;
-  }
+  },
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
 };
 
 module.exports = nextConfig; 

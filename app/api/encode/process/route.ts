@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { writeFile, readFile, unlink, mkdir } from "fs/promises";
+import { readFile, unlink, mkdir } from "fs/promises";
 import { join } from "path";
 import ffmpeg from "fluent-ffmpeg";
 import { existsSync } from "fs";
 import { PlatformPreset, PLATFORM_PRESETS } from "@/app/types/quality";
 import ffmpegStatic from 'ffmpeg-static';
-import { createReadStream, createWriteStream } from 'fs';
+import { createWriteStream } from 'fs';
 import { pipeline } from 'stream/promises';
-import pLimit from 'p-limit';
 import os from 'os';
+import { Readable } from 'stream';
 
 // FFmpegのパスを設定
 const ffmpegPath = ffmpegStatic || 'ffmpeg';
@@ -152,6 +152,25 @@ function findBestOffset(videoSamples: number[], audioSamples: number[]): number 
   return offsetSeconds;
 }
 
+// ストリーム変換用のヘルパー関数を追加
+function webStreamToNodeStream(webStream: ReadableStream<Uint8Array>): Readable {
+  const reader = webStream.getReader();
+  return new Readable({
+    async read() {
+      try {
+        const { done, value } = await reader.read();
+        if (done) {
+          this.push(null);
+          return;
+        }
+        this.push(Buffer.from(value));
+      } catch (error) {
+        this.destroy(error as Error);
+      }
+    }
+  });
+}
+
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
@@ -187,15 +206,20 @@ export async function POST(request: NextRequest) {
 
     // 一時ファイルとして保存
     const videoWriteStream = createWriteStream(videoPath);
+
+    // ストリーム変換処理を追加
+    const videoNodeStream = webStreamToNodeStream(video.stream());
+    const audioNodeStream = webStreamToNodeStream(audio.stream());
+
     await pipeline(
-      video.stream(), 
+      videoNodeStream,
       videoWriteStream
     );
 
     // 音声ファイルの保存処理を追加
     const audioWriteStream = createWriteStream(audioPath);
     await pipeline(
-      audio.stream(), 
+      audioNodeStream,
       audioWriteStream
     );
 
