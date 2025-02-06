@@ -33,7 +33,7 @@ export default function EncodePage() {
   const [outputFileName, setOutputFileName] = useState("");
   const [platform, setPlatform] = useState<PlatformPreset>("youtube");
 
-  // audioFile が変更されたら、出力ファイル名の初期値を設定
+  // audioFileが変更されたら、出力ファイル名の初期値を設定
   useEffect(() => {
     if (audioFile) {
       const baseName = audioFile.name.replace(/\.[^/.]+$/, "");
@@ -41,7 +41,7 @@ export default function EncodePage() {
     }
   }, [audioFile]);
 
-  // audioStartTime が変更されたら自動的に波形更新（すでに波形がある場合）
+  // audioStartTimeが変更されたら自動的に波形を更新（既に波形がある場合）
   useEffect(() => {
     if (videoFile && audioFile && (videoWaveform || audioWaveform)) {
       analyzeWaveforms();
@@ -68,7 +68,7 @@ export default function EncodePage() {
       } else if (file.type === "audio/wav") {
         setAudioFile(file);
       }
-      // 進捗シミュレーション
+      // 進捗のシミュレーション
       for (let i = 0; i <= 100; i += 10) {
         setUploadProgress(i);
         await new Promise((resolve) => setTimeout(resolve, 50));
@@ -78,7 +78,6 @@ export default function EncodePage() {
     setIsUploading(false);
     setUploadProgress(0);
 
-    // 両方のファイルが選択されている場合、波形分析を自動実行
     const updatedFiles = files.reduce(
       (acc, file) => {
         if (file.type === "video/mp4") acc.video = file;
@@ -112,10 +111,7 @@ export default function EncodePage() {
       } catch (error) {
         toast({
           title: "エラー",
-          description:
-            error instanceof Error
-              ? error.message
-              : "波形分析に失敗しました",
+          description: error instanceof Error ? error.message : "波形分析に失敗しました",
           variant: "destructive",
         });
       } finally {
@@ -179,8 +175,7 @@ export default function EncodePage() {
     } catch (error) {
       toast({
         title: "エラー",
-        description:
-          error instanceof Error ? error.message : "波形分析に失敗しました",
+        description: error instanceof Error ? error.message : "波形分析に失敗しました",
         variant: "destructive",
       });
     } finally {
@@ -197,7 +192,6 @@ export default function EncodePage() {
       });
       return;
     }
-
     if (!outputFileName.trim()) {
       toast({
         title: "エラー",
@@ -206,7 +200,6 @@ export default function EncodePage() {
       });
       return;
     }
-
     setIsProcessing(true);
     const formData = new FormData();
     formData.append("video", videoFile);
@@ -226,13 +219,17 @@ export default function EncodePage() {
       }
       const result = await response.json();
       if (result.success) {
-        // 自動ダウンロード処理
+        // 自動ダウンロード：result.url のファイルを fetch で Blob 化し、オブジェクトURLからダウンロードを実施
+        const fileResponse = await fetch(result.url);
+        const blob = await fileResponse.blob();
+        const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
-        link.href = result.url;
+        link.href = url;
         link.download = `${outputFileName.trim()}.mp4`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        URL.revokeObjectURL(url);
         toast({
           title: "成功",
           description: "動画の処理が完了し、ダウンロードが開始されました",
@@ -243,8 +240,7 @@ export default function EncodePage() {
     } catch (error) {
       toast({
         title: "エラー",
-        description:
-          error instanceof Error ? error.message : "動画処理に失敗しました",
+        description: error instanceof Error ? error.message : "動画処理に失敗しました",
         variant: "destructive",
       });
     } finally {
@@ -272,19 +268,11 @@ export default function EncodePage() {
           </Button>
         )}
       </div>
-
       <Card>
-        <CardContent
-          className={cn(
-            "p-8 transition-all duration-300",
-            !videoFile || !audioFile ? "min-h-[300px]" : ""
-          )}
-        >
+        <CardContent className={cn("p-8 transition-all duration-300", !videoFile || !audioFile ? "min-h-[300px]" : "")}>
           {isUploading ? (
             <div className="space-y-4">
-              <div className="text-center text-lg font-medium">
-                ファイルをアップロード中...
-              </div>
+              <div className="text-center text-lg font-medium">ファイルをアップロード中...</div>
               <Progress value={uploadProgress} className="w-full" />
             </div>
           ) : !videoFile || !audioFile ? (
@@ -304,37 +292,20 @@ export default function EncodePage() {
                 </div>
                 <div className="text-lg font-medium">
                   ファイルをドラッグ＆ドロップ
-                  <br />
-                  または
+                  <br />または
                 </div>
                 <label className="inline-block">
-                  <input
-                    type="file"
-                    accept=".mp4,.wav"
-                    multiple
-                    onChange={handleFileChange}
-                    className="hidden"
-                  />
-                  <Button variant="outline" type="button">
-                    ファイルを選択
-                  </Button>
+                  <input type="file" accept=".mp4,.wav" multiple onChange={handleFileChange} className="hidden" />
+                  <Button variant="outline" type="button">ファイルを選択</Button>
                 </label>
                 <div className="text-sm text-muted-foreground">
                   必要なファイル:
                   <div className="flex justify-center gap-4 mt-2">
-                    <Badge
-                      variant={videoFile ? "default" : "secondary"}
-                      className="gap-2"
-                    >
-                      <Video className="h-4 w-4" />
-                      本家動画 (.mp4)
+                    <Badge variant={videoFile ? "default" : "secondary"} className="gap-2">
+                      <Video className="h-4 w-4" /> 本家動画 (.mp4)
                     </Badge>
-                    <Badge
-                      variant={audioFile ? "default" : "secondary"}
-                      className="gap-2"
-                    >
-                      <Music4 className="h-4 w-4" />
-                      Mix音源 (.wav)
+                    <Badge variant={audioFile ? "default" : "secondary"} className="gap-2">
+                      <Music4 className="h-4 w-4" /> Mix音源 (.wav)
                     </Badge>
                   </div>
                 </div>
@@ -347,17 +318,14 @@ export default function EncodePage() {
                   <div className="h-6">
                     {isAnalyzing && (
                       <div className="flex items-center gap-2 text-muted-foreground">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        <span>波形を分析中...</span>
+                        <Loader2 className="h-4 w-4 animate-spin" /> <span>波形を分析中...</span>
                       </div>
                     )}
                   </div>
                   <div className="flex flex-col gap-1">
                     <div className="flex items-center justify-between">
                       <div className="flex flex-col">
-                        <span className="text-sm font-medium">
-                          Mix音源の開始位置
-                        </span>
+                        <span className="text-sm font-medium">Mix音源の開始位置</span>
                         {videoWaveform && audioWaveform && (
                           <p className="text-sm text-muted-foreground mt-1">
                             スライダーを動かして2つの波形の山が重なるように調整してください
@@ -365,69 +333,38 @@ export default function EncodePage() {
                         )}
                       </div>
                       <div className="flex items-center gap-2">
-                        <Input
-                          type="number"
-                          value={audioStartTime}
-                          onChange={handleInputChange}
-                          step="0.01"
-                          min="-3"
-                          max="3"
-                          className="w-24 text-right font-mono"
-                        />
+                        <Input type="number" value={audioStartTime} onChange={handleInputChange} step="0.01" min="-3" max="3" className="w-24 text-right font-mono" />
                         <span className="text-sm font-mono">秒</span>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-mono">-3.00</span>
-                      <Slider
-                        value={[audioStartTime]}
-                        onValueChange={handleSliderChange}
-                        min={-3}
-                        max={3}
-                        step={0.01}
-                        className="flex-grow"
-                      />
+                      <Slider value={[audioStartTime]} onValueChange={handleSliderChange} min={-3} max={3} step={0.01} className="flex-grow" />
                       <span className="text-sm font-mono">+3.00</span>
                     </div>
                   </div>
                 </div>
-
                 {videoWaveform && audioWaveform && (
                   <div className="space-y-4">
                     <div className="bg-blue-50 dark:bg-blue-950 p-4 rounded-lg space-y-2">
                       <h3 className="font-medium flex items-center gap-2">
-                        <Waves className="h-4 w-4" />
-                        波形の位置合わせ
+                        <Waves className="h-4 w-4" /> 波形の位置合わせ
                       </h3>
                       <p className="text-sm text-muted-foreground">
                         1. 上の波形（本家動画）と下の波形（Mix音源）の山が重なるように調整します
-                        <br />
-                        2. 赤い線を基準に、Mix音源の開始位置を調整してください
-                        <br />
-                        3. 波形が合ったら、下の「動画を生成」ボタンをクリックしてください
+                        <br />2. 赤い線を基準に、Mix音源の開始位置を調整してください
+                        <br />3. 波形が合ったら、下の「動画を生成」ボタンをクリックしてください
                       </p>
                     </div>
                     <div className="relative group">
-                      <Image
-                        src={`data:image/png;base64,${videoWaveform}`}
-                        alt="動画の波形"
-                        width={1920}
-                        height={240}
-                        className="w-full rounded-lg"
-                      />
+                      <Image src={`data:image/png;base64,${videoWaveform}`} alt="動画の波形" width={1920} height={240} className="w-full rounded-lg" />
                       <div className="absolute top-0 left-1/2 h-full w-0.5 bg-red-500" />
                       <div className="absolute top-2 left-2 bg-black/50 text-white px-2 py-1 rounded text-sm opacity-0 group-hover:opacity-100 transition-opacity">
                         本家動画の波形
                       </div>
                     </div>
                     <div className="relative group">
-                      <Image
-                        src={`data:image/png;base64,${audioWaveform}`}
-                        alt="音声の波形"
-                        width={1920}
-                        height={240}
-                        className="w-full rounded-lg"
-                      />
+                      <Image src={`data:image/png;base64,${audioWaveform}`} alt="音声の波形" width={1920} height={240} className="w-full rounded-lg" />
                       <div className="absolute top-0 left-1/2 h-full w-0.5 bg-red-500" />
                       <div className="absolute top-2 left-2 bg-black/50 text-white px-2 py-1 rounded text-sm opacity-0 group-hover:opacity-100 transition-opacity">
                         Mix音源の波形
@@ -444,10 +381,7 @@ export default function EncodePage() {
                             アップロード先に合わせて最適な設定を選択してください
                           </p>
                         </div>
-                        <PlatformSelector
-                          value={platform}
-                          onChange={setPlatform}
-                        />
+                        <PlatformSelector value={platform} onChange={setPlatform} />
                       </div>
                       <div className="flex items-center gap-2 w-full max-w-md">
                         <Input
@@ -456,20 +390,12 @@ export default function EncodePage() {
                           placeholder="出力ファイル名"
                           className="flex-grow font-mono"
                         />
-                        <span className="text-sm font-mono text-muted-foreground">
-                          .mp4
-                        </span>
+                        <span className="text-sm font-mono text-muted-foreground">.mp4</span>
                       </div>
-                      <Button
-                        onClick={processVideo}
-                        disabled={isProcessing}
-                        size="lg"
-                        className="w-64 h-16 text-lg"
-                      >
+                      <Button onClick={processVideo} disabled={isProcessing} size="lg" className="w-64 h-16 text-lg">
                         {isProcessing ? (
                           <>
-                            <Loader2 className="mr-3 h-6 w-6 animate-spin" />
-                            処理中...
+                            <Loader2 className="mr-3 h-6 w-6 animate-spin" /> 処理中...
                           </>
                         ) : (
                           "動画を生成"
